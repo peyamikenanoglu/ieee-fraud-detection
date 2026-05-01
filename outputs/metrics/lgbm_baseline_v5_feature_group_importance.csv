@@ -1,0 +1,14 @@
+feature_group,total_importance,mean_importance,n_features
+V_features,5448,16.07079646017699,339
+card_features,4658,465.8,10
+D_features,2984,175.52941176470588,17
+C_features,2689,192.07142857142858,14
+identity_id_features,1417,40.48571428571429,35
+address_features,1376,344.0,4
+time_features,1253,313.25,4
+amount_features,1180,236.0,5
+email_features,889,127.0,7
+M_features,678,75.33333333333333,9
+distance_features,438,219.0,2
+device_browser_os_features,348,87.0,4
+other,142,71.0,2

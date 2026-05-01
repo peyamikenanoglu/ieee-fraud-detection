@@ -1,0 +1,11 @@
+version,model,feature_strategy,accuracy_0_50,precision_0_50,recall_0_50,f1_0_50,roc_auc,pr_auc,logloss,best_threshold,best_precision,best_recall,best_f1,notes
+v1,LightGBM,Controlled baseline features,0.891,0.2007,0.7264,0.3145,0.8974,0.479,0.2882,0.85,0.5273,0.4232,0.4696,Initial controlled LightGBM baseline
+v2,LightGBM,Added email-derived features,0.8896,0.1988,0.7291,0.3124,0.9015,0.488,0.2901,0.85,0.5398,0.4304,0.4789,"Email-domain missingness, grouping, and same-domain features"
+v3,LightGBM,Added transaction amount features,0.8917,0.2035,0.737,0.3189,0.9034,0.4852,0.2842,0.86,0.5701,0.4173,0.4819,"Log amount, decimal amount, cents, and round-amount indicators"
+v4,LightGBM,Added card frequency feature,0.8962,0.2105,0.733,0.3271,0.9082,0.4891,0.2782,0.86,0.576,0.4122,0.4805,Added leakage-safe card1_count
+v5,LightGBM,Expanded memory-safe feature set,0.9167,0.2538,0.7328,0.377,0.9186,0.5436,0.2423,0.78,0.5384,0.4977,0.5172,Raw-data memory-safe pipeline with many transaction and identity features
+v6,LightGBM,Added interaction counts and amount aggregations,0.9377,0.3163,0.7003,0.4358,0.9198,0.5725,0.1932,0.78,0.6188,0.506,0.5568,"Leakage-safe frequency, interaction-count, and amount aggregation features"
+v7,LightGBM,UID-style features and stronger aggregations,0.96,0.4429,0.6363,0.5223,0.9252,0.5977,0.1321,0.7,0.6564,0.5385,0.5916,Best single model; strongest operational F1
+v7,XGBoost,UID-style features and stronger aggregations,0.9273,0.2804,0.7107,0.4021,0.9223,0.5495,0.231,,,,,Used as part of final ensemble
+v7,CatBoost,UID-style features and stronger aggregations,0.8936,0.2089,0.7515,0.3269,0.9112,0.5091,0.3049,,,,,Used as part of final ensemble
+v7,Final Ensemble,Weighted ensemble: LightGBM 0.70 + XGBoost 0.20 + CatBoost 0.10,0.9546,0.4018,0.655,0.4981,0.9292,0.5905,0.1621,0.71,0.6365,0.5334,0.5804,Final champion by ROC-AUC

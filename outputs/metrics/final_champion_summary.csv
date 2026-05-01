@@ -1,0 +1,4 @@
+selection_type,version,model,roc_auc,pr_auc,logloss,best_threshold,best_f1,notes
+Final champion by ROC-AUC,v7,Final Ensemble,0.9292,0.5905,0.1621,0.71,0.5804,Final champion by ROC-AUC
+Best single model by ROC-AUC,v7,LightGBM,0.9252,0.5977,0.1321,0.7,0.5916,Best single model; strongest operational F1
+Best operational model by F1,v7,LightGBM,0.9252,0.5977,0.1321,0.7,0.5916,Best single model; strongest operational F1

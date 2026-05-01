@@ -1,0 +1,31 @@
+IEEE-CIS Fraud Detection - Schema and Merge Check
+================================================================================
+
+Transaction schema check:
+{'n_train_columns_without_target': 393, 'n_test_columns': 393, 'n_common_columns': 393, 'only_in_train': [], 'only_in_test': []}
+
+Identity schema check:
+{'n_train_columns_without_target': 41, 'n_test_columns': 41, 'n_common_columns': 41, 'only_in_train': [], 'only_in_test': []}
+
+Transaction-identity overlap:
+{'dataset': 'train', 'transaction_rows': 590540, 'identity_rows': 144233, 'overlap_count': 144233, 'identity_coverage_ratio': 0.2442391709283029, 'identity_ids_not_in_transaction': 0}
+{'dataset': 'test', 'transaction_rows': 506691, 'identity_rows': 141907, 'overlap_count': 141907, 'identity_coverage_ratio': 0.28006615471756946, 'identity_ids_not_in_transaction': 0}
+
+Merged shapes:
+train_merged shape: (590540, 435)
+test_merged shape:  (506691, 434)
+
+Merged schema check:
+{'n_train_columns_without_target': 434, 'n_test_columns': 434, 'n_common_columns': 434, 'only_in_train': [], 'only_in_test': []}
+
+has_identity counts:
+Train:
+has_identity
+0    446307
+1    144233
+Name: count, dtype: int64
+Test:
+has_identity
+0    364784
+1    141907
+Name: count, dtype: int64

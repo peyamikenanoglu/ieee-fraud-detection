@@ -1,0 +1,7 @@
+feature,importance
+TransactionAmt,971
+TransactionAmt_decimal,370
+TransactionAmt_log,223
+TransactionAmt_cents,78
+TransactionAmt_is_round_0,6
+TransactionAmt_is_round_1,1
