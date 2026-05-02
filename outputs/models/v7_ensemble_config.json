@@ -1,0 +1,18 @@
+{
+    "model_name": "v7 Final Ensemble",
+    "models": {
+        "lightgbm": "D:\\GitHub\\ieee-fraud-detection\\outputs\\models\\lgbm_v7_model.joblib",
+        "xgboost": "D:\\GitHub\\ieee-fraud-detection\\outputs\\models\\xgb_v7_model.joblib",
+        "catboost": "D:\\GitHub\\ieee-fraud-detection\\outputs\\models\\cat_v7_model.cbm"
+    },
+    "ensemble_weights": {
+        "lightgbm": 0.7,
+        "xgboost": 0.2,
+        "catboost": 0.1
+    },
+    "threshold_default": 0.5,
+    "threshold_best_f1": 0.71,
+    "primary_metric": "ROC-AUC",
+    "validation_roc_auc": 0.9292,
+    "note": "Final v7 ensemble artifact for API and Streamlit deployment."
+}
