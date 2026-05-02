@@ -1,96 +1,82 @@
-# IEEE-CIS Fraud Detection: Time-Aware Fraud Classification with Advanced Feature Engineering and Ensemble Learning
+# IEEE-CIS Fraud Detection
+
+A time-aware fraud detection pipeline for the IEEE-CIS Fraud Detection dataset. The project builds a complete machine learning workflow using structured tabular data, leakage-safe feature engineering, LightGBM, XGBoost, CatBoost, and weighted ensemble learning.
+
+The final model reaches a validation ROC-AUC of **0.9292** using a weighted ensemble of LightGBM, XGBoost, and CatBoost.
 
 ## Project Overview
 
-This project develops a machine learning pipeline for the **IEEE-CIS Fraud Detection** dataset. The objective is to predict whether an online transaction is fraudulent using transaction, identity, device, email, card, address, and engineered behavioral features.
-
-The target variable is `isFraud`:
+The objective is to predict whether an online transaction is fraudulent.
 
 | Target | Meaning |
 |---|---|
-| `0` | Non-fraud transaction |
-| `1` | Fraud transaction |
+| `isFraud = 0` | Non-fraud transaction |
+| `isFraud = 1` | Fraud transaction |
 
-The dataset is highly imbalanced, with fraud representing only a small fraction of all transactions. Because of this imbalance, the project does not rely on accuracy alone. The main competition-style metric is **ROC-AUC**, while **PR-AUC**, **LogLoss**, **Precision**, **Recall**, **F1-score**, and threshold analysis are also reported.
-
-## Why This Project Matters
-
-Fraud detection is not only a classification problem. It is also a ranking, probability calibration, and decision-threshold problem. A useful fraud model should rank risky transactions effectively, produce meaningful probabilities, and allow an operational threshold to be selected depending on the desired trade-off between catching fraud and reducing false positives.
-
-This project follows a structured, leakage-aware workflow:
-
-1. Understand the dataset and schema.
-2. Use time-aware validation instead of random validation.
-3. Start from a controlled baseline.
-4. Add feature engineering step by step.
-5. Monitor multiple metrics.
-6. Compare model versions clearly.
-7. Build a final ensemble for the main ROC-AUC objective.
-8. Preserve a single best operational model for threshold-based fraud decisions.
+This is a binary classification problem with strong class imbalance. Fraudulent transactions represent only a small proportion of the dataset, so accuracy alone is not sufficient. The project uses ROC-AUC as the main metric, while also reporting PR-AUC, LogLoss, precision, recall, F1-score, and threshold-based results.
 
 ## Dataset
 
-The original Kaggle dataset contains the following files:
+The project uses the Kaggle IEEE-CIS Fraud Detection dataset.
+
+Expected raw files:
 
 | File | Description |
 |---|---|
-| `train_transaction.csv` | Main training transaction table; includes `isFraud` |
-| `train_identity.csv` | Identity/device information for part of the training transactions |
-| `test_transaction.csv` | Main test transaction table; no target column |
-| `test_identity.csv` | Identity/device information for part of the test transactions |
-| `sample_submission.csv` | Kaggle submission format |
+| `train_transaction.csv` | Main transaction training data |
+| `train_identity.csv` | Identity and device information for a subset of train transactions |
+| `test_transaction.csv` | Main transaction test data |
+| `test_identity.csv` | Identity and device information for a subset of test transactions |
+| `sample_submission.csv` | Kaggle sample submission format |
 
-The transaction and identity files are merged using `TransactionID`.
+The raw data files are not included in this repository because they are large Kaggle files. To reproduce the project, download them from Kaggle and place them in:
 
-Identity information is available only for a subset of transactions. To preserve this information, a binary feature was created:
+```text
+DATA/raw/
+```
 
-| Feature | Meaning |
-|---|---|
-| `has_identity` | `1` if identity information exists for the transaction, otherwise `0` |
+or, using this repository structure:
+
+```text
+data/raw/
+```
 
 ## Validation Strategy
 
-A **time-aware train/validation split** was used.
+A time-aware validation strategy was used instead of a random split.
 
-The dataset was sorted by transaction time using the engineered `TransactionDay` feature. The first 80% of observations were used for training, and the final 20% were used for validation.
+The dataset was sorted using `TransactionDay`. The first 80% of the observations were used for training, and the last 20% were used for validation.
 
-This strategy was selected because fraud detection is time-dependent. In real deployment, a model is trained on past transactions and evaluated on future transactions. A random split may leak temporal patterns and produce overly optimistic validation scores.
+This is important because fraud detection is time-dependent. A random split can create overly optimistic results if future-like information leaks into training.
 
-## Evaluation Metrics
-
-| Metric | Purpose |
+| Split | Description |
 |---|---|
-| ROC-AUC | Main ranking metric and official Kaggle-style metric |
-| PR-AUC | Important for imbalanced fraud data |
-| LogLoss | Measures probability quality |
-| Precision | Measures how many predicted frauds are actually fraud |
-| Recall | Measures how many actual frauds are caught |
-| F1-score | Balances precision and recall |
-| Threshold analysis | Finds better decision thresholds than the default 0.50 |
+| Train | First 80% of transactions by time |
+| Validation | Last 20% of transactions by time |
 
 ## Feature Engineering
 
-The project started with a controlled baseline and gradually added more advanced features. All aggregation and frequency features were built in a leakage-safe way: statistics were learned from the training split only and then mapped to validation.
+The project started from a controlled baseline and gradually added stronger feature groups.
 
 ### Time Features
 
-The original `TransactionDT` field is a relative timestamp. The following features were derived:
+Derived from `TransactionDT`:
 
-| Feature | Meaning |
+| Feature | Description |
 |---|---|
-| `TransactionDay` | Day index derived from `TransactionDT` |
-| `TransactionHour` | Hour of transaction derived from `TransactionDT` |
-| `TransactionWeek` | Week index derived from `TransactionDay` |
+| `TransactionDay` | Transaction day derived from `TransactionDT` |
+| `TransactionHour` | Hour of transaction |
+| `TransactionWeek` | Week index derived from transaction day |
 
 ### Email Features
 
-The original email fields are `P_emaildomain` and `R_emaildomain`. The following features were created:
+Derived from `P_emaildomain` and `R_emaildomain`:
 
-| Feature | Meaning |
+| Feature | Description |
 |---|---|
 | `P_email_missing` | Whether purchaser email domain is missing |
 | `R_email_missing` | Whether recipient email domain is missing |
-| `same_email_domain` | Whether purchaser and recipient email domains are identical |
+| `same_email_domain` | Whether purchaser and recipient domains are the same |
 | `P_email_group` | Grouped purchaser email domain |
 | `R_email_group` | Grouped recipient email domain |
 
@@ -98,120 +84,88 @@ Email domains were grouped into categories such as `gmail`, `yahoo`, `hotmail`, 
 
 ### Transaction Amount Features
 
-The transaction amount was one of the strongest predictors. The following features were created:
+Derived from `TransactionAmt`:
 
-| Feature | Meaning |
+| Feature | Description |
 |---|---|
-| `TransactionAmt_log` | Log-transformed amount using `log1p` |
-| `TransactionAmt_decimal` | Fractional part of the amount |
-| `TransactionAmt_is_round` | Whether the amount is a round number |
-| `TransactionAmt_cents` | Approximate cents/fractional component |
-
-Examples:
-
-| `TransactionAmt` | `TransactionAmt_decimal` | `TransactionAmt_is_round` | `TransactionAmt_cents` |
-|---:|---:|---:|---:|
-| `29.0` | `0.0` | `1` | `0` |
-| `68.5` | `0.5` | `0` | `50` |
+| `TransactionAmt_log` | `log1p(TransactionAmt)` |
+| `TransactionAmt_decimal` | Decimal part of transaction amount |
+| `TransactionAmt_is_round` | Whether amount is a round number |
+| `TransactionAmt_cents` | Approximate cents/fractional amount component |
 
 ### Frequency Features
 
-Frequency features count how often a value appears in the training split.
+Frequency features count how often a value appears in the training data. These were computed on the training split only and mapped to validation to avoid leakage.
 
 Examples:
 
-| Feature | Meaning |
+| Feature | Description |
 |---|---|
-| `card1_count` | Frequency of each `card1` value in training |
-| `card2_count` | Frequency of each `card2` value in training |
-| `card3_count` | Frequency of each `card3` value in training |
-| `card5_count` | Frequency of each `card5` value in training |
-| `addr1_count` | Frequency of each `addr1` value in training |
-| `addr2_count` | Frequency of each `addr2` value in training |
+| `card1_count` | Frequency of each `card1` value in train |
+| `card2_count` | Frequency of each `card2` value in train |
+| `card3_count` | Frequency of each `card3` value in train |
+| `card5_count` | Frequency of each `card5` value in train |
+| `addr1_count` | Frequency of each `addr1` value in train |
+| `addr2_count` | Frequency of each `addr2` value in train |
 
-If a validation or test value was not seen in training, its count was set to `0`.
+### Identity and Device Features
 
-### Device, Browser, and OS Grouping
+High-cardinality identity strings were grouped into simpler categories.
 
-Several identity columns contain high-cardinality text values. Instead of using raw strings directly, grouped features were created.
-
-| Raw Column | Engineered Feature |
-|---|---|
-| `id_30` | `OS_group` |
-| `id_31` | `Browser_group` |
-| `DeviceInfo` | `DeviceInfo_group` |
-| `id_33` | `screen_width`, `screen_height` |
-
-Examples of grouped values include `windows`, `ios`, `android`, `mac`, `chrome`, `safari`, `firefox`, `samsung`, `apple_mobile`, `other`, and `Missing`.
+| Feature | Source | Description |
+|---|---|---|
+| `OS_group` | `id_30` | Simplified operating system group |
+| `Browser_group` | `id_31` | Simplified browser group |
+| `DeviceInfo_group` | `DeviceInfo` | Simplified device/manufacturer group |
+| `screen_width` | `id_33` | Extracted screen width |
+| `screen_height` | `id_33` | Extracted screen height |
+| `has_identity` | identity merge | Whether identity data exists for the transaction |
 
 ### UID-Style Features
 
-UID-style features are artificial identifiers created by combining multiple transaction fields. They approximate user/card/account behavior without a real user ID.
+UID-style features are artificial identifiers created by combining multiple transaction fields. They approximate user, card, or account behavior without having a real user ID.
 
-For example, `card1` alone may represent a card-like signal, but combining it with address, email, and product information creates a more specific behavioral identifier.
+For example:
 
-The following UID-style features were created:
-
-| UID Feature | Construction |
-|---|---|
-| `uid_card1_addr1` | `card1 + '_' + addr1` |
-| `uid_card1_card2_addr1` | `card1 + '_' + card2 + '_' + addr1` |
-| `uid_card1_addr1_pemail` | `card1 + '_' + addr1 + '_' + P_emaildomain` |
-| `uid_card1_card2_addr1_pemail` | `card1 + '_' + card2 + '_' + addr1 + '_' + P_emaildomain` |
-| `uid_card1_addr1_product` | `card1 + '_' + addr1 + '_' + ProductCD` |
-| `uid_card1_card2_addr1_product` | `card1 + '_' + card2 + '_' + addr1 + '_' + ProductCD` |
-
-Example:
-
-If:
-
-```text
-card1 = 13926
-addr1 = 315
+```python
+uid_card1_addr1 = str(card1) + "_" + str(addr1)
 ```
 
-Then:
+If `card1 = 13926` and `addr1 = 315`, then:
 
 ```text
 uid_card1_addr1 = "13926_315"
 ```
 
-If:
+UID features created in the final version:
 
-```text
-card1 = 13926
-card2 = 327
-addr1 = 315
-P_emaildomain = gmail.com
-```
+| UID Feature | Construction |
+|---|---|
+| `uid_card1_addr1` | `card1 + addr1` |
+| `uid_card1_card2_addr1` | `card1 + card2 + addr1` |
+| `uid_card1_addr1_pemail` | `card1 + addr1 + P_emaildomain` |
+| `uid_card1_card2_addr1_pemail` | `card1 + card2 + addr1 + P_emaildomain` |
+| `uid_card1_addr1_product` | `card1 + addr1 + ProductCD` |
+| `uid_card1_card2_addr1_product` | `card1 + card2 + addr1 + ProductCD` |
 
-Then:
-
-```text
-uid_card1_card2_addr1_pemail = "13926_327_315_gmail.com"
-```
-
-UID-style features were highly influential in the final LightGBM model.
+These features help the model learn whether a transaction is unusual relative to a specific card-address-email or card-address-product pattern.
 
 ### Aggregation Features
 
-Aggregation features compare a transaction against the historical behavior of a group. These statistics were calculated on the training split only.
+Transaction amount aggregation features were created using training-only group statistics.
 
-Group columns included:
+Groups used included:
 
 - `card1`
 - `card2`
 - `addr1`
 - `P_emaildomain`
 - `ProductCD`
-- `uid_card1_addr1`
-- `uid_card1_card2_addr1`
-- `uid_card1_addr1_pemail`
-- `uid_card1_addr1_product`
+- UID-style features
 
-For each group, the following transaction amount statistics were created:
+For each group, the following statistics were created:
 
-| Statistic | Example Feature |
+| Statistic | Example |
 |---|---|
 | Mean | `card1_TransactionAmt_mean` |
 | Standard deviation | `card1_TransactionAmt_std` |
@@ -219,18 +173,20 @@ For each group, the following transaction amount statistics were created:
 | Minimum | `card1_TransactionAmt_min` |
 | Maximum | `card1_TransactionAmt_max` |
 
-Additional relative amount features were created:
+Relative amount features were also created:
 
 | Feature Pattern | Meaning |
 |---|---|
-| `TransactionAmt_minus_<group>_mean` | Difference between current amount and group mean |
-| `TransactionAmt_ratio_<group>_mean` | Current amount divided by group mean |
-| `TransactionAmt_zscore_<group>` | Standardized deviation from group behavior |
-| `TransactionAmt_range_ratio_<group>` | Position of current amount within group min-max range |
+| `TransactionAmt_minus_<group>_mean` | Difference from group mean |
+| `TransactionAmt_ratio_<group>_mean` | Ratio to group mean |
+| `TransactionAmt_zscore_<group>` | Standardized amount within group |
+| `TransactionAmt_range_ratio_<group>` | Position within group min-max range |
 
-These aggregation features became some of the most important predictors in v6 and v7.
+These aggregation features became some of the strongest predictors in the final model.
 
-## Modeling Path
+## Modeling Strategy
+
+The project tested several model versions from v1 to v7.
 
 | Version | Main Strategy |
 |---|---|
@@ -239,10 +195,19 @@ These aggregation features became some of the most important predictors in v6 an
 | v3 | Added transaction amount features |
 | v4 | Added `card1_count` |
 | v5 | Expanded memory-safe feature set |
-| v6 | Added interaction counts and amount aggregations |
+| v6 | Added interaction-count and amount aggregation features |
 | v7 | Added UID-style features, stronger aggregations, and ensemble learning |
 
+The final version used:
+
+- LightGBM
+- XGBoost
+- CatBoost
+- Weighted probability ensemble
+
 ## Final Results
+
+### Model Comparison
 
 | Version | Model | ROC-AUC | PR-AUC | LogLoss | F1 at 0.50 | Best F1 |
 |---|---|---:|---:|---:|---:|---:|
@@ -257,19 +222,17 @@ These aggregation features became some of the most important predictors in v6 an
 | v7 | CatBoost | 0.9112 | 0.5091 | 0.3049 | 0.3269 | N/A |
 | v7 | Final Ensemble | 0.9292 | 0.5905 | 0.1621 | 0.4981 | 0.5804 |
 
-## Final Champion
+### Final Champion
 
-The final champion by ROC-AUC is the **v7 Final Ensemble**.
-
-Ensemble weights:
+The final champion by ROC-AUC is the v7 weighted ensemble.
 
 | Model | Weight |
 |---|---:|
-| LightGBM v7 | 0.70 |
-| XGBoost v7 | 0.20 |
-| CatBoost v7 | 0.10 |
+| LightGBM | 0.70 |
+| XGBoost | 0.20 |
+| CatBoost | 0.10 |
 
-Final ensemble performance:
+Final ensemble results:
 
 | Metric | Value |
 |---|---:|
@@ -280,9 +243,9 @@ Final ensemble performance:
 | Best threshold | 0.71 |
 | Best F1 | 0.5804 |
 
-## Best Single Model
+### Best Single Model
 
-The best single model is **LightGBM v7**.
+The best single model was LightGBM v7.
 
 | Metric | Value |
 |---|---:|
@@ -293,82 +256,110 @@ The best single model is **LightGBM v7**.
 | Best threshold | 0.70 |
 | Best F1 | 0.5916 |
 
-The LightGBM v7 model achieved the best operational F1 and the strongest single-model probability quality.
+The final ensemble produced the highest ROC-AUC, while LightGBM v7 produced the strongest single-model operational F1.
 
-## Final Interpretation
+## Visual Results
 
-The final ensemble achieved the highest ROC-AUC, which matches the competition-style ranking objective.
+### ROC-AUC Progress
 
-The LightGBM v7 single model achieved the best PR-AUC, lowest LogLoss, and best threshold-optimized F1. This makes it the strongest operational model if a single deployable model is preferred.
+![ROC-AUC Progress](outputs/figures/final_model_comparison_roc_auc_zoomed.png)
 
-Therefore, this project reports two final conclusions:
+### ROC-AUC Gain vs Baseline
 
-| Selection | Model |
-|---|---|
-| Final champion by ROC-AUC | v7 Final Ensemble |
-| Best operational single model | LightGBM v7 |
+![ROC-AUC Gain vs v1](outputs/figures/final_model_comparison_roc_auc_gain_vs_v1.png)
 
-## Output Files
+### Final Stage Model Comparison
 
-Important generated outputs:
+![Final Stage Model Comparison](outputs/figures/final_stage_model_comparison.png)
 
-| File | Description |
-|---|---|
-| `outputs/metrics/final_model_comparison.csv` | Final model comparison table |
-| `outputs/metrics/final_champion_summary.csv` | Final champion summary |
-| `outputs/figures/final_model_comparison_roc_auc_zoomed.png` | Zoomed ROC-AUC comparison |
-| `outputs/figures/final_model_comparison_roc_auc_gain_vs_v1.png` | ROC-AUC gain versus v1 |
-| `outputs/figures/final_model_comparison_ranking_metrics.png` | Ranking and F1 metric comparison |
-| `outputs/figures/final_model_comparison_logloss.png` | LogLoss comparison |
-| `outputs/figures/final_stage_model_comparison.png` | Final-stage model comparison |
+### Ranking Metrics
+
+![Ranking Metrics](outputs/figures/final_model_comparison_ranking_metrics.png)
+
+### LogLoss Comparison
+
+![LogLoss Comparison](outputs/figures/final_model_comparison_logloss.png)
+
+### LightGBM v7 Feature Importance
+
+![LightGBM v7 Feature Importance](outputs/figures/lgbm_baseline_v7_final_feature_importance_top40.png)
+
+### v7 Ensemble Threshold Analysis
+
+![v7 Ensemble Threshold Analysis](outputs/figures/v7_final_best_ensemble_threshold_analysis.png)
 
 ## Repository Structure
 
 ```text
 ieee-fraud-detection/
 │
+├── README.md
+├── requirements.txt
+├── .gitignore
+│
 ├── data/
-│   ├── raw/
-│   └── processed/
+│   ├── raw/              # Kaggle raw data, not tracked by Git
+│   ├── processed/        # Generated processed CSVs, not tracked by Git
+│   └── interim/
 │
-├── outputs/
-│   ├── figures/
-│   └── metrics/
-│
-├── reports/
-│   └── final_project_summary.md
+├── notebooks/
+│   ├── 01_data_understanding.py
+│   ├── 02_identity_understanding.py
+│   ├── 03_email_feature_understanding.py
+│   └── dataset_notes.md
 │
 ├── src/
+│   ├── data_loading_and_inspection.py
 │   ├── data_preparation.py
-│   ├── data_preparation_v5.py
+│   ├── preprocessing_baseline_v1.py
+│   ├── modeling_baseline_v1.py
+│   ├── modeling_baseline_v2.py
+│   ├── modeling_baseline_v3.py
 │   ├── modeling_baseline_v4.py
 │   ├── modeling_baseline_v5_from_raw_memory_safe.py
 │   ├── modeling_baseline_v6_from_raw_memory_safe.py
 │   ├── modeling_baseline_v7_final.py
 │   └── final_model_comparison.py
 │
-├── README.md
-└── requirements.txt
+├── outputs/
+│   ├── figures/
+│   └── metrics/
+│
+└── reports/
+    └── final_project_summary.md
 ```
 
-## How to Run
+## Reproducibility
 
-The final comparison file can be run with:
+Install dependencies:
 
 ```bash
-cd D:\GitHub\ieee-fraud-detection
-python src\final_model_comparison.py
+pip install -r requirements.txt
 ```
 
-The final v7 model pipeline can be run with:
+Place the Kaggle raw files in:
+
+```text
+data/raw/
+```
+
+Run the final model script:
 
 ```bash
-cd D:\GitHub\ieee-fraud-detection
-python src\modeling_baseline_v7_final.py
+python src/modeling_baseline_v7_final.py
 ```
 
-## Project Closing Decision
+Run final comparison and generate summary plots:
 
-No further feature-engineering versions will be created after v7.
+```bash
+python src/final_model_comparison.py
+```
 
-The project is considered complete from the modeling perspective. The remaining work is repository cleanup, final README refinement, and optional Kaggle submission generation.
+## Key Takeaways
+
+- Time-aware validation was used to reduce optimistic evaluation.
+- Feature engineering improved ROC-AUC from 0.8974 to 0.9292.
+- UID-style features and transaction amount aggregations were highly effective.
+- The final ensemble achieved the best ROC-AUC.
+- LightGBM v7 was the strongest single model and achieved the best operational F1.
+- The project demonstrates a complete end-to-end tabular fraud detection workflow suitable for portfolio presentation.
