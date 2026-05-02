@@ -12,6 +12,10 @@ Target column:
 
 The dataset is highly imbalanced.
 
+## Reading Note
+
+This file is a chronological project log. Statements such as "current champion" refer to the best model at that stage of the project. The final selected champion is reported in the Baseline v7 Final section.
+
 ## Raw Files
 
 - `train_transaction.csv`: main training transaction table; contains `isFraud`
@@ -1233,7 +1237,7 @@ Missing-value check:
 
 Small technical note:
 
-`TransactionAmt_cents` may contain values up to 100 because of rounding. This is acceptable for the current experiment, but it can be clipped to 0–99 in a later cleanup if needed.
+In early v3 experiments, `TransactionAmt_cents` could contain values up to 100 due to rounding. In the later memory-safe pipelines, this feature was clipped to the range 0–99.
 
 
 ## Baseline v3 - LightGBM Results
