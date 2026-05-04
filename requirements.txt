@@ -8,3 +8,4 @@ catboost
 fastapi
 uvicorn
 requests
+streamlit
