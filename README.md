@@ -355,6 +355,115 @@ Run final comparison and generate summary plots:
 python src/final_model_comparison.py
 ```
 
+## FastAPI Prediction Service
+
+This project includes a FastAPI backend for serving the final fraud detection model.
+
+The API uses the final v7 ensemble model:
+
+- LightGBM weight: 0.70
+- XGBoost weight: 0.20
+- CatBoost weight: 0.10
+- Default operational threshold: 0.71
+
+The API loads the saved local model artifacts from `outputs/models/`.
+
+Large model artifact files are not tracked by Git. To recreate them locally, run:
+
+`python src/train_v7_ensemble_artifacts.py`
+
+Before running the API, make sure the model artifacts exist.
+
+### Run the API
+
+`uvicorn api.app:app --reload`
+
+After startup, the API is available at:
+
+`http://127.0.0.1:8000`
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/` | GET | Root endpoint showing API status links |
+| `/health` | GET | Checks whether the model is loaded |
+| `/docs` | GET | Interactive Swagger API documentation |
+| `/predict` | POST | Predicts fraud probability for a transaction |
+
+### Test the API
+
+Use the included test request script:
+
+`python test_api_request.py`
+
+Example response:
+
+{
+  "model_name": "v7 Final Ensemble",
+  "threshold": 0.71,
+  "prediction": 0,
+  "fraud_probability": 0.0226,
+  "risk_label": "non_fraud",
+  "model_probabilities": {
+    "lightgbm": 0.0071,
+    "xgboost": 0.0416,
+    "catboost": 0.0930
+  }
+}
+
+The API performs the same final v7 preprocessing logic used during model development, including:
+
+- base feature engineering
+- UID-style feature construction
+- frequency mapping
+- interaction-count mapping
+- transaction amount aggregation mapping
+- categorical encoding
+- median imputation
+- final feature alignment
+- ensemble probability calculation
+
+## Streamlit Frontend
+
+A Streamlit frontend is included for interactive fraud prediction.
+
+The Streamlit app sends transaction data to the FastAPI backend and displays:
+
+- fraud probability
+- predicted class
+- risk label
+- selected threshold
+- individual model probabilities
+- raw API response
+
+### Run the Streamlit App
+
+First, start the API in one terminal:
+
+`uvicorn api.app:app --reload`
+
+Then start Streamlit in a second terminal:
+
+`streamlit run streamlit_app.py`
+
+The Streamlit app will open at:
+
+`http://localhost:8501`
+
+If it does not open automatically, paste the URL into the browser.
+
+### Streamlit Workflow
+
+1. Start the FastAPI backend.
+2. Start the Streamlit frontend.
+3. Enter transaction values in the form.
+4. Choose a decision threshold.
+5. Click `Predict Fraud Risk`.
+6. Review the ensemble fraud probability and model-level probabilities.
+
+The Streamlit interface is intended for demonstration and portfolio presentation. The backend prediction logic remains inside the FastAPI service.
+
 ## Key Takeaways
 
 - Time-aware validation was used to reduce optimistic evaluation.
