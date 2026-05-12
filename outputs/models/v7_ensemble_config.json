@@ -11,8 +11,8 @@
         "catboost": 0.1
     },
     "threshold_default": 0.5,
-    "threshold_best_f1": 0.71,
+    "threshold_best_f1": 0.7100000000000002,
     "primary_metric": "ROC-AUC",
-    "validation_roc_auc": 0.9292,
-    "note": "Final v7 ensemble artifact for API and Streamlit deployment."
+    "validation_roc_auc": 0.9292235986283748,
+    "note": "Final v7 ensemble artifact for FastAPI and Streamlit deployment."
 }

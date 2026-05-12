@@ -1,18 +1,20 @@
 ################################################
 # IEEE-CIS Fraud Detection
-# Baseline v7 Final - UID + Aggregation + Memory-Safe LightGBM
+# Train v7 Final Ensemble Artifacts for API and Streamlit
 ################################################
 
 from pathlib import Path
 import gc
+import json
+import warnings
 
-import matplotlib.pyplot as plt
+import joblib
 import numpy as np
 import pandas as pd
-import json
-import joblib
 
 from lightgbm import LGBMClassifier
+from xgboost import XGBClassifier
+from catboost import CatBoostClassifier
 
 from sklearn.metrics import (
     accuracy_score,
@@ -23,8 +25,10 @@ from sklearn.metrics import (
     average_precision_score,
     log_loss,
     confusion_matrix,
-    classification_report
+    classification_report,
 )
+
+warnings.filterwarnings("ignore")
 
 pd.set_option("display.max_columns", None)
 pd.set_option("display.width", 500)
@@ -36,18 +40,18 @@ pd.set_option("display.width", 500)
 
 PROJECT_ROOT = Path(r"D:\GitHub\ieee-fraud-detection")
 RAW_DATA_DIR = PROJECT_ROOT / "data" / "raw"
-FIGURES_DIR = PROJECT_ROOT / "outputs" / "figures"
+MODELS_DIR = PROJECT_ROOT / "outputs" / "models"
 METRICS_DIR = PROJECT_ROOT / "outputs" / "metrics"
 
-FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+MODELS_DIR.mkdir(parents=True, exist_ok=True)
 METRICS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 ################################################
-# Helper Functions
+# Utility Functions
 ################################################
 
-def reduce_memory_usage(dataframe):
+def reduce_memory_usage(dataframe: pd.DataFrame) -> pd.DataFrame:
     dataframe = dataframe.copy()
 
     for col in dataframe.columns:
@@ -63,15 +67,76 @@ def reduce_memory_usage(dataframe):
     return dataframe
 
 
-def standardize_identity_columns(identity_df):
+def standardize_identity_columns(identity_df: pd.DataFrame) -> pd.DataFrame:
     identity_df = identity_df.copy()
     identity_df.columns = [col.replace("-", "_") for col in identity_df.columns]
     return identity_df
 
 
-def safe_str(series):
+def safe_str(series: pd.Series) -> pd.Series:
     return series.astype("string").fillna("Missing").astype(str)
 
+
+def scalar_to_safe_key(value) -> str:
+    try:
+        if pd.isna(value):
+            return "Missing"
+    except Exception:
+        pass
+
+    return str(value)
+
+
+def make_json_safe(obj):
+    """
+    Convert pandas/numpy objects into plain Python objects so artifacts can be
+    loaded safely across package versions.
+    """
+
+    if isinstance(obj, pd.Series):
+        return {str(k): make_json_safe(v) for k, v in obj.to_dict().items()}
+
+    if isinstance(obj, pd.DataFrame):
+        return [
+            {str(k): make_json_safe(v) for k, v in row.items()}
+            for row in obj.to_dict(orient="records")
+        ]
+
+    if isinstance(obj, dict):
+        safe_dict = {}
+
+        for key, value in obj.items():
+            safe_key = scalar_to_safe_key(key)
+            safe_dict[safe_key] = make_json_safe(value)
+
+        return safe_dict
+
+    if isinstance(obj, (list, tuple)):
+        return [make_json_safe(item) for item in obj]
+
+    if isinstance(obj, np.integer):
+        return int(obj)
+
+    if isinstance(obj, np.floating):
+        if np.isnan(obj):
+            return None
+        return float(obj)
+
+    if isinstance(obj, np.ndarray):
+        return [make_json_safe(item) for item in obj.tolist()]
+
+    try:
+        if pd.isna(obj):
+            return None
+    except Exception:
+        pass
+
+    return obj
+
+
+################################################
+# Feature Engineering Helper Functions
+################################################
 
 def group_email_domain(email_domain):
     if pd.isna(email_domain):
@@ -199,7 +264,7 @@ def extract_screen_height(screen_value):
         return np.nan
 
 
-def add_base_features(dataframe):
+def add_base_features(dataframe: pd.DataFrame) -> pd.DataFrame:
     dataframe = dataframe.copy()
 
     dataframe["TransactionDay"] = (dataframe["TransactionDT"] // (60 * 60 * 24)).astype(np.int16)
@@ -242,44 +307,41 @@ def add_base_features(dataframe):
     return dataframe
 
 
-def add_uid_features(dataframe):
+def add_uid_features(dataframe: pd.DataFrame) -> pd.DataFrame:
     dataframe = dataframe.copy()
 
-    dataframe["uid_card1_addr1"] = (
-        safe_str(dataframe["card1"]) + "_" +
-        safe_str(dataframe["addr1"])
-    )
+    dataframe["uid_card1_addr1"] = safe_str(dataframe["card1"]) + "_" + safe_str(dataframe["addr1"])
 
     dataframe["uid_card1_card2_addr1"] = (
-        safe_str(dataframe["card1"]) + "_" +
-        safe_str(dataframe["card2"]) + "_" +
-        safe_str(dataframe["addr1"])
+        safe_str(dataframe["card1"]) + "_"
+        + safe_str(dataframe["card2"]) + "_"
+        + safe_str(dataframe["addr1"])
     )
 
     dataframe["uid_card1_addr1_pemail"] = (
-        safe_str(dataframe["card1"]) + "_" +
-        safe_str(dataframe["addr1"]) + "_" +
-        safe_str(dataframe["P_emaildomain"])
+        safe_str(dataframe["card1"]) + "_"
+        + safe_str(dataframe["addr1"]) + "_"
+        + safe_str(dataframe["P_emaildomain"])
     )
 
     dataframe["uid_card1_card2_addr1_pemail"] = (
-        safe_str(dataframe["card1"]) + "_" +
-        safe_str(dataframe["card2"]) + "_" +
-        safe_str(dataframe["addr1"]) + "_" +
-        safe_str(dataframe["P_emaildomain"])
+        safe_str(dataframe["card1"]) + "_"
+        + safe_str(dataframe["card2"]) + "_"
+        + safe_str(dataframe["addr1"]) + "_"
+        + safe_str(dataframe["P_emaildomain"])
     )
 
     dataframe["uid_card1_addr1_product"] = (
-        safe_str(dataframe["card1"]) + "_" +
-        safe_str(dataframe["addr1"]) + "_" +
-        safe_str(dataframe["ProductCD"])
+        safe_str(dataframe["card1"]) + "_"
+        + safe_str(dataframe["addr1"]) + "_"
+        + safe_str(dataframe["ProductCD"])
     )
 
     dataframe["uid_card1_card2_addr1_product"] = (
-        safe_str(dataframe["card1"]) + "_" +
-        safe_str(dataframe["card2"]) + "_" +
-        safe_str(dataframe["addr1"]) + "_" +
-        safe_str(dataframe["ProductCD"])
+        safe_str(dataframe["card1"]) + "_"
+        + safe_str(dataframe["card2"]) + "_"
+        + safe_str(dataframe["addr1"]) + "_"
+        + safe_str(dataframe["ProductCD"])
     )
 
     return dataframe
@@ -301,6 +363,7 @@ def add_frequency_features_train_valid(train_df, valid_df, columns):
 
     return train_df, valid_df, frequency_maps
 
+
 def add_interaction_count_features_train_valid(train_df, valid_df, interactions):
     train_df = train_df.copy()
     valid_df = valid_df.copy()
@@ -321,6 +384,7 @@ def add_interaction_count_features_train_valid(train_df, valid_df, interactions)
             interaction_maps[f"{col_a}__{col_b}"] = counts.to_dict()
 
     return train_df, valid_df, interaction_maps
+
 
 def add_amount_aggregation_features_train_valid(train_df, valid_df, group_cols, target_col="TransactionAmt"):
     train_df = train_df.copy()
@@ -427,6 +491,7 @@ def add_amount_aggregation_features_train_valid(train_df, valid_df, group_cols, 
 
     return train_df, valid_df, aggregation_maps, global_stats
 
+
 def encode_categorical_train_valid(X_train, X_valid, cat_cols):
     X_train = X_train.copy()
     X_valid = X_valid.copy()
@@ -446,10 +511,17 @@ def encode_categorical_train_valid(X_train, X_valid, cat_cols):
 
     return X_train, X_valid, categorical_maps
 
-def evaluate_model(y_true, y_pred, y_proba, model_name):
+
+################################################
+# Evaluation Functions
+################################################
+
+def evaluate_predictions(y_true, y_proba, threshold, model_name):
+    y_pred = (y_proba >= threshold).astype(int)
+
     results = {
         "model": model_name,
-        "threshold": 0.50,
+        "threshold": threshold,
         "accuracy": accuracy_score(y_true, y_pred),
         "precision": precision_score(y_true, y_pred, zero_division=0),
         "recall": recall_score(y_true, y_pred),
@@ -460,6 +532,7 @@ def evaluate_model(y_true, y_pred, y_proba, model_name):
     }
 
     print(f"##################### {model_name} Metrics #####################")
+
     for key, value in results.items():
         if key != "model":
             print(f"{key}: {value:.4f}")
@@ -472,47 +545,26 @@ def evaluate_model(y_true, y_pred, y_proba, model_name):
 
     return results
 
-def make_json_safe(obj):
-    """
-    Convert pandas/numpy objects into plain Python objects so artifacts can be
-    loaded safely across package versions.
-    """
 
-    if isinstance(obj, pd.Series):
-        return {str(k): make_json_safe(v) for k, v in obj.to_dict().items()}
+def threshold_search(y_true, y_proba, thresholds):
+    rows = []
 
-    if isinstance(obj, pd.DataFrame):
-        return [
-            {str(k): make_json_safe(v) for k, v in row.items()}
-            for row in obj.to_dict(orient="records")
-        ]
+    for threshold in thresholds:
+        y_pred = (y_proba >= threshold).astype(int)
 
-    if isinstance(obj, dict):
-        safe_dict = {}
-        for key, value in obj.items():
-            if pd.isna(key):
-                safe_key = "Missing"
-            else:
-                safe_key = str(key)
-            safe_dict[safe_key] = make_json_safe(value)
-        return safe_dict
+        rows.append({
+            "threshold": float(threshold),
+            "accuracy": accuracy_score(y_true, y_pred),
+            "precision": precision_score(y_true, y_pred, zero_division=0),
+            "recall": recall_score(y_true, y_pred),
+            "f1": f1_score(y_true, y_pred),
+        })
 
-    if isinstance(obj, (list, tuple)):
-        return [make_json_safe(item) for item in obj]
+    results_df = pd.DataFrame(rows)
+    best_row = results_df.loc[results_df["f1"].idxmax()]
 
-    if isinstance(obj, np.integer):
-        return int(obj)
+    return results_df, best_row
 
-    if isinstance(obj, np.floating):
-        return float(obj)
-
-    if isinstance(obj, np.ndarray):
-        return [make_json_safe(item) for item in obj.tolist()]
-
-    if pd.isna(obj):
-        return None
-
-    return obj
 
 ################################################
 # Load Raw Data
@@ -544,19 +596,13 @@ print(df.shape)
 
 
 ################################################
-# Base Feature Engineering
+# Base + UID Feature Engineering
 ################################################
 
 df = add_base_features(df)
 df = add_uid_features(df)
 
-drop_cols = [
-    "DeviceInfo",
-    "id_30",
-    "id_31",
-    "id_33",
-]
-
+drop_cols = ["DeviceInfo", "id_30", "id_31", "id_33"]
 drop_cols = [col for col in drop_cols if col in df.columns]
 df = df.drop(columns=drop_cols)
 
@@ -592,7 +638,7 @@ print("Valid day range:", valid_df["TransactionDay"].min(), valid_df["Transactio
 
 
 ################################################
-# v7 Leakage-Safe Frequency, UID, and Aggregation Features
+# v7 Leakage-Safe Frequency, Interaction, Aggregation Features
 ################################################
 
 frequency_cols = [
@@ -613,7 +659,7 @@ frequency_cols = [
 train_df, valid_df, frequency_maps = add_frequency_features_train_valid(
     train_df,
     valid_df,
-    frequency_cols
+    frequency_cols,
 )
 
 interaction_cols = [
@@ -633,7 +679,7 @@ interaction_cols = [
 train_df, valid_df, interaction_maps = add_interaction_count_features_train_valid(
     train_df,
     valid_df,
-    interaction_cols
+    interaction_cols,
 )
 
 amount_group_cols = [
@@ -652,7 +698,7 @@ train_df, valid_df, aggregation_maps, global_amount_stats = add_amount_aggregati
     train_df,
     valid_df,
     amount_group_cols,
-    target_col="TransactionAmt"
+    target_col="TransactionAmt",
 )
 
 train_df = reduce_memory_usage(train_df)
@@ -660,7 +706,7 @@ valid_df = reduce_memory_usage(valid_df)
 
 gc.collect()
 
-print("##################### After v7 UID and Aggregation Features #####################")
+print("##################### After v7 Feature Engineering #####################")
 print(f"train_df shape: {train_df.shape}")
 print(f"valid_df shape: {valid_df.shape}")
 print(f"train memory: {train_df.memory_usage(deep=True).sum() / 1024 ** 2:.2f} MB")
@@ -698,15 +744,11 @@ num_cols = [
 print("##################### Column Types #####################")
 print(f"Categorical columns: {len(cat_cols)}")
 print(f"Numerical columns: {len(num_cols)}")
-print("Sample categorical columns:")
-print(cat_cols[:30])
-print("Sample numerical columns:")
-print(num_cols[:30])
 
 X_train, X_valid, categorical_maps = encode_categorical_train_valid(
     X_train,
     X_valid,
-    cat_cols
+    cat_cols,
 )
 
 print("##################### Categorical Encoding Done #####################")
@@ -750,6 +792,8 @@ for col in X_train.columns:
         X_train[col] = X_train[col].astype(np.int32)
         X_valid[col] = X_valid[col].astype(np.int32)
 
+feature_columns = X_train.columns.tolist()
+
 gc.collect()
 
 print("##################### Final Data Shapes #####################")
@@ -757,12 +801,10 @@ print(f"X_train shape: {X_train.shape}")
 print(f"X_valid shape: {X_valid.shape}")
 print(f"X_train memory: {X_train.memory_usage(deep=True).sum() / 1024 ** 2:.2f} MB")
 print(f"X_valid memory: {X_valid.memory_usage(deep=True).sum() / 1024 ** 2:.2f} MB")
-print("Final dtypes:")
-print(X_train.dtypes.value_counts())
 
 
 ################################################
-# LightGBM v7 Final
+# Train LightGBM v7
 ################################################
 
 lgbm_model = LGBMClassifier(
@@ -778,466 +820,149 @@ lgbm_model = LGBMClassifier(
     class_weight="balanced",
     random_state=42,
     n_jobs=-1,
-    force_col_wise=True
+    force_col_wise=True,
 )
 
-print("##################### Training LightGBM Baseline v7 Final #####################")
+print("##################### Training LightGBM v7 #####################")
 lgbm_model.fit(X_train, y_train)
 
-lgbm_valid_pred = lgbm_model.predict(X_valid)
 lgbm_valid_proba = lgbm_model.predict_proba(X_valid)[:, 1]
 
-lgbm_v7_results = evaluate_model(
+lgbm_results = evaluate_predictions(
     y_true=y_valid,
-    y_pred=lgbm_valid_pred,
     y_proba=lgbm_valid_proba,
-    model_name="LightGBM Baseline v7 Final"
+    threshold=0.50,
+    model_name="LightGBM v7",
 )
 
 
 ################################################
-# v7 Final Ensemble: LightGBM + XGBoost + CatBoost
+# Train XGBoost v7
 ################################################
 
-print("##################### Starting v7 Final Ensemble #####################")
+scale_pos_weight = y_train.value_counts()[0] / y_train.value_counts()[1]
 
-model_probas = {
-    "LightGBM": lgbm_valid_proba
+xgb_model = XGBClassifier(
+    n_estimators=700,
+    learning_rate=0.035,
+    max_depth=6,
+    min_child_weight=3,
+    subsample=0.85,
+    colsample_bytree=0.80,
+    gamma=0.0,
+    reg_alpha=0.05,
+    reg_lambda=1.0,
+    objective="binary:logistic",
+    eval_metric="logloss",
+    tree_method="hist",
+    scale_pos_weight=scale_pos_weight,
+    random_state=42,
+    n_jobs=-1,
+)
+
+print("##################### Training XGBoost v7 #####################")
+xgb_model.fit(X_train, y_train)
+
+xgb_valid_proba = xgb_model.predict_proba(X_valid)[:, 1]
+
+xgb_results = evaluate_predictions(
+    y_true=y_valid,
+    y_proba=xgb_valid_proba,
+    threshold=0.50,
+    model_name="XGBoost v7",
+)
+
+
+################################################
+# Train CatBoost v7
+################################################
+
+cat_model = CatBoostClassifier(
+    iterations=700,
+    learning_rate=0.035,
+    depth=6,
+    l2_leaf_reg=5.0,
+    loss_function="Logloss",
+    eval_metric="AUC",
+    auto_class_weights="Balanced",
+    random_seed=42,
+    verbose=100,
+    allow_writing_files=False,
+)
+
+print("##################### Training CatBoost v7 #####################")
+cat_model.fit(X_train, y_train)
+
+cat_valid_proba = cat_model.predict_proba(X_valid)[:, 1]
+
+cat_results = evaluate_predictions(
+    y_true=y_valid,
+    y_proba=cat_valid_proba,
+    threshold=0.50,
+    model_name="CatBoost v7",
+)
+
+
+################################################
+# Final Weighted Ensemble
+################################################
+
+ensemble_weights = {
+    "lightgbm": 0.70,
+    "xgboost": 0.20,
+    "catboost": 0.10,
 }
 
-model_results = [
-    lgbm_v7_results
-]
-
-
-################################################
-# XGBoost Model
-################################################
-
-try:
-    from xgboost import XGBClassifier
-
-    scale_pos_weight = y_train.value_counts()[0] / y_train.value_counts()[1]
-
-    xgb_model = XGBClassifier(
-        n_estimators=700,
-        learning_rate=0.035,
-        max_depth=6,
-        min_child_weight=3,
-        subsample=0.85,
-        colsample_bytree=0.80,
-        gamma=0.0,
-        reg_alpha=0.05,
-        reg_lambda=1.0,
-        objective="binary:logistic",
-        eval_metric="logloss",
-        tree_method="hist",
-        scale_pos_weight=scale_pos_weight,
-        random_state=42,
-        n_jobs=-1
-    )
-
-    print("##################### Training XGBoost v7 Final #####################")
-    xgb_model.fit(X_train, y_train)
-
-    xgb_valid_pred = xgb_model.predict(X_valid)
-    xgb_valid_proba = xgb_model.predict_proba(X_valid)[:, 1]
-
-    xgb_results = evaluate_model(
-        y_true=y_valid,
-        y_pred=xgb_valid_pred,
-        y_proba=xgb_valid_proba,
-        model_name="XGBoost v7 Final"
-    )
-
-    model_probas["XGBoost"] = xgb_valid_proba
-    model_results.append(xgb_results)
-
-except Exception as error:
-    print("##################### XGBoost skipped #####################")
-    print(error)
-
-
-################################################
-# CatBoost Model
-################################################
-
-try:
-    from catboost import CatBoostClassifier
-
-    cat_model = CatBoostClassifier(
-        iterations=700,
-        learning_rate=0.035,
-        depth=6,
-        l2_leaf_reg=5.0,
-        loss_function="Logloss",
-        eval_metric="AUC",
-        auto_class_weights="Balanced",
-        random_seed=42,
-        verbose=100,
-        allow_writing_files=False
-    )
-
-    print("##################### Training CatBoost v7 Final #####################")
-    cat_model.fit(X_train, y_train)
-
-    cat_valid_proba = cat_model.predict_proba(X_valid)[:, 1]
-    cat_valid_pred = (cat_valid_proba >= 0.50).astype(int)
-
-    cat_results = evaluate_model(
-        y_true=y_valid,
-        y_pred=cat_valid_pred,
-        y_proba=cat_valid_proba,
-        model_name="CatBoost v7 Final"
-    )
-
-    model_probas["CatBoost"] = cat_valid_proba
-    model_results.append(cat_results)
-
-except Exception as error:
-    print("##################### CatBoost skipped #####################")
-    print(error)
-
-
-################################################
-# Save Individual Model Comparison
-################################################
-
-model_results_df = pd.DataFrame(model_results)
-
-individual_model_results_path = METRICS_DIR / "v7_final_individual_model_results.csv"
-model_results_df.to_csv(individual_model_results_path, index=False)
-
-print("##################### v7 Individual Model Results #####################")
-print(model_results_df)
-
-print("##################### Saved v7 Individual Model Results #####################")
-print(individual_model_results_path)
-
-
-################################################
-# Ensemble Weight Search
-################################################
-
-print("##################### v7 Ensemble Weight Search #####################")
-
-available_models = list(model_probas.keys())
-
-ensemble_results = []
-
-if len(available_models) == 1:
-    best_ensemble_name = available_models[0]
-    best_ensemble_proba = model_probas[best_ensemble_name]
-
-    best_ensemble_row = {
-        "ensemble_name": best_ensemble_name,
-        "weights": "single_model",
-        "roc_auc": roc_auc_score(y_valid, best_ensemble_proba),
-        "pr_auc": average_precision_score(y_valid, best_ensemble_proba),
-        "logloss": log_loss(y_valid, best_ensemble_proba),
-        "f1_0_50": f1_score(y_valid, (best_ensemble_proba >= 0.50).astype(int)),
-    }
-
-else:
-    weight_values = np.arange(0.0, 1.01, 0.05)
-
-    if len(available_models) == 2:
-        model_a, model_b = available_models
-
-        for weight_a in weight_values:
-            weight_b = 1.0 - weight_a
-
-            ensemble_proba = (
-                weight_a * model_probas[model_a]
-                + weight_b * model_probas[model_b]
-            )
-
-            ensemble_pred = (ensemble_proba >= 0.50).astype(int)
-
-            ensemble_results.append({
-                "ensemble_name": f"{model_a}_{model_b}",
-                "weights": f"{model_a}:{weight_a:.2f}, {model_b}:{weight_b:.2f}",
-                "roc_auc": roc_auc_score(y_valid, ensemble_proba),
-                "pr_auc": average_precision_score(y_valid, ensemble_proba),
-                "logloss": log_loss(y_valid, ensemble_proba),
-                "f1_0_50": f1_score(y_valid, ensemble_pred),
-            })
-
-    elif len(available_models) >= 3:
-        model_a, model_b, model_c = available_models[:3]
-
-        for weight_a in weight_values:
-            for weight_b in weight_values:
-                weight_c = 1.0 - weight_a - weight_b
-
-                if weight_c < 0:
-                    continue
-
-                ensemble_proba = (
-                    weight_a * model_probas[model_a]
-                    + weight_b * model_probas[model_b]
-                    + weight_c * model_probas[model_c]
-                )
-
-                ensemble_pred = (ensemble_proba >= 0.50).astype(int)
-
-                ensemble_results.append({
-                    "ensemble_name": f"{model_a}_{model_b}_{model_c}",
-                    "weights": f"{model_a}:{weight_a:.2f}, {model_b}:{weight_b:.2f}, {model_c}:{weight_c:.2f}",
-                    "roc_auc": roc_auc_score(y_valid, ensemble_proba),
-                    "pr_auc": average_precision_score(y_valid, ensemble_proba),
-                    "logloss": log_loss(y_valid, ensemble_proba),
-                    "f1_0_50": f1_score(y_valid, ensemble_pred),
-                })
-
-    ensemble_results_df = pd.DataFrame(ensemble_results).sort_values(
-        by="roc_auc",
-        ascending=False
-    )
-
-    best_ensemble_row = ensemble_results_df.iloc[0].to_dict()
-
-    ensemble_results_path = METRICS_DIR / "v7_final_ensemble_weight_search.csv"
-    ensemble_results_df.to_csv(ensemble_results_path, index=False)
-
-    print("##################### Top 20 v7 Ensemble Results by ROC-AUC #####################")
-    print(ensemble_results_df.head(20))
-
-    print("##################### Saved v7 Ensemble Weight Search #####################")
-    print(ensemble_results_path)
-
-    best_weights_text = best_ensemble_row["weights"]
-
-    if len(available_models) == 2:
-        model_a, model_b = available_models
-        weights = {}
-
-        for part in best_weights_text.split(", "):
-            name, value = part.split(":")
-            weights[name] = float(value)
-
-        best_ensemble_proba = (
-            weights[model_a] * model_probas[model_a]
-            + weights[model_b] * model_probas[model_b]
-        )
-
-    else:
-        model_a, model_b, model_c = available_models[:3]
-        weights = {}
-
-        for part in best_weights_text.split(", "):
-            name, value = part.split(":")
-            weights[name] = float(value)
-
-        best_ensemble_proba = (
-            weights[model_a] * model_probas[model_a]
-            + weights[model_b] * model_probas[model_b]
-            + weights[model_c] * model_probas[model_c]
-        )
-
-
-print("##################### Best v7 Ensemble by ROC-AUC #####################")
-print(best_ensemble_row)
-
-
-################################################
-# Evaluate Best Ensemble at Threshold 0.50
-################################################
-
-best_ensemble_pred_0_50 = (best_ensemble_proba >= 0.50).astype(int)
-
-best_ensemble_results = evaluate_model(
-    y_true=y_valid,
-    y_pred=best_ensemble_pred_0_50,
-    y_proba=best_ensemble_proba,
-    model_name="v7 Final Best Ensemble"
+ensemble_valid_proba = (
+    ensemble_weights["lightgbm"] * lgbm_valid_proba
+    + ensemble_weights["xgboost"] * xgb_valid_proba
+    + ensemble_weights["catboost"] * cat_valid_proba
 )
 
-best_ensemble_metrics_path = METRICS_DIR / "v7_final_best_ensemble_metrics.csv"
-pd.DataFrame([best_ensemble_results]).to_csv(best_ensemble_metrics_path, index=False)
+ensemble_results = evaluate_predictions(
+    y_true=y_valid,
+    y_proba=ensemble_valid_proba,
+    threshold=0.50,
+    model_name="v7 Final Ensemble",
+)
 
-print("##################### Saved v7 Best Ensemble Metrics #####################")
-print(best_ensemble_metrics_path)
+thresholds = np.arange(0.50, 0.91, 0.01)
 
+ensemble_threshold_results_df, best_ensemble_threshold_row = threshold_search(
+    y_true=y_valid,
+    y_proba=ensemble_valid_proba,
+    thresholds=thresholds,
+)
 
-################################################
-# Best Ensemble Threshold Search
-################################################
-
-ensemble_thresholds = np.arange(0.50, 0.91, 0.01)
-
-ensemble_threshold_results = []
-
-for threshold in ensemble_thresholds:
-    threshold_pred = (best_ensemble_proba >= threshold).astype(int)
-
-    ensemble_threshold_results.append({
-        "threshold": threshold,
-        "accuracy": accuracy_score(y_valid, threshold_pred),
-        "precision": precision_score(y_valid, threshold_pred, zero_division=0),
-        "recall": recall_score(y_valid, threshold_pred),
-        "f1": f1_score(y_valid, threshold_pred),
-    })
-
-ensemble_threshold_results_df = pd.DataFrame(ensemble_threshold_results)
-
-best_ensemble_threshold_row = ensemble_threshold_results_df.loc[
-    ensemble_threshold_results_df["f1"].idxmax()
-]
+lgbm_threshold_results_df, best_lgbm_threshold_row = threshold_search(
+    y_true=y_valid,
+    y_proba=lgbm_valid_proba,
+    thresholds=thresholds,
+)
 
 print("##################### v7 Best Ensemble Threshold by F1 #####################")
 print(best_ensemble_threshold_row)
 
-ensemble_threshold_results_path = METRICS_DIR / "v7_final_best_ensemble_threshold_results.csv"
-ensemble_threshold_results_df.to_csv(ensemble_threshold_results_path, index=False)
-
-print("##################### Saved v7 Best Ensemble Threshold Results #####################")
-print(ensemble_threshold_results_path)
-
-
-################################################
-# Plot Best Ensemble Threshold Search
-################################################
-
-plt.figure(figsize=(10, 6))
-plt.plot(ensemble_threshold_results_df["threshold"], ensemble_threshold_results_df["precision"], label="Precision")
-plt.plot(ensemble_threshold_results_df["threshold"], ensemble_threshold_results_df["recall"], label="Recall")
-plt.plot(ensemble_threshold_results_df["threshold"], ensemble_threshold_results_df["f1"], label="F1")
-plt.xlabel("Threshold")
-plt.ylabel("Score")
-plt.title("v7 Final Best Ensemble - Threshold Analysis")
-plt.legend()
-plt.tight_layout()
-
-ensemble_threshold_figure_path = FIGURES_DIR / "v7_final_best_ensemble_threshold_analysis.png"
-plt.savefig(ensemble_threshold_figure_path, dpi=300)
-plt.show()
-
-print("##################### Saved v7 Best Ensemble Threshold Figure #####################")
-print(ensemble_threshold_figure_path)
-
-################################################
-# Threshold Search
-################################################
-
-thresholds = np.arange(0.50, 0.91, 0.01)
-
-threshold_results = []
-
-for threshold in thresholds:
-    threshold_pred = (lgbm_valid_proba >= threshold).astype(int)
-
-    threshold_results.append({
-        "threshold": threshold,
-        "accuracy": accuracy_score(y_valid, threshold_pred),
-        "precision": precision_score(y_valid, threshold_pred, zero_division=0),
-        "recall": recall_score(y_valid, threshold_pred),
-        "f1": f1_score(y_valid, threshold_pred),
-    })
-
-threshold_results_df = pd.DataFrame(threshold_results)
-
-best_f1_row = threshold_results_df.loc[
-    threshold_results_df["f1"].idxmax()
-]
-
 print("##################### LightGBM v7 Best Threshold by F1 #####################")
-print(best_f1_row)
+print(best_lgbm_threshold_row)
 
 
 ################################################
-# Save Metrics and Threshold Outputs
+# Save Models
 ################################################
-
-pd.DataFrame([lgbm_v7_results]).to_csv(
-    METRICS_DIR / "lgbm_baseline_v7_final_metrics.csv",
-    index=False
-)
-
-threshold_results_df.to_csv(
-    METRICS_DIR / "lgbm_baseline_v7_final_threshold_results.csv",
-    index=False
-)
-
-plt.figure(figsize=(10, 6))
-plt.plot(threshold_results_df["threshold"], threshold_results_df["precision"], label="Precision")
-plt.plot(threshold_results_df["threshold"], threshold_results_df["recall"], label="Recall")
-plt.plot(threshold_results_df["threshold"], threshold_results_df["f1"], label="F1")
-plt.xlabel("Threshold")
-plt.ylabel("Score")
-plt.title("LightGBM Baseline v7 Final - Threshold Analysis")
-plt.legend()
-plt.tight_layout()
-
-threshold_figure_path = FIGURES_DIR / "lgbm_baseline_v7_final_threshold_analysis.png"
-plt.savefig(threshold_figure_path, dpi=300)
-plt.show()
-
-
-################################################
-# Feature Importance
-################################################
-
-feature_importance_df = pd.DataFrame({
-    "feature": X_train.columns,
-    "importance": lgbm_model.feature_importances_
-}).sort_values("importance", ascending=False)
-
-feature_importance_path = METRICS_DIR / "lgbm_baseline_v7_final_feature_importance.csv"
-feature_importance_df.to_csv(feature_importance_path, index=False)
-
-print("##################### Top 60 Feature Importances - v7 Final #####################")
-print(feature_importance_df.head(60))
-
-top_features = feature_importance_df.head(40).sort_values("importance", ascending=True)
-
-plt.figure(figsize=(10, 12))
-plt.barh(top_features["feature"], top_features["importance"])
-plt.xlabel("Importance")
-plt.title("LightGBM Baseline v7 Final - Top 40 Feature Importances")
-plt.tight_layout()
-
-feature_importance_figure_path = FIGURES_DIR / "lgbm_baseline_v7_final_feature_importance_top40.png"
-plt.savefig(feature_importance_figure_path, dpi=300)
-plt.show()
-
-
-################################################
-# Save Summary
-################################################
-
-print("##################### Saved v7 Final Outputs #####################")
-print(METRICS_DIR / "lgbm_baseline_v7_final_metrics.csv")
-print(METRICS_DIR / "lgbm_baseline_v7_final_threshold_results.csv")
-print(feature_importance_path)
-print(threshold_figure_path)
-print(feature_importance_figure_path)
-
-
-################################################
-# Save v7 Final Ensemble Artifacts for API
-################################################
-
-MODELS_DIR = PROJECT_ROOT / "outputs" / "models"
-MODELS_DIR.mkdir(parents=True, exist_ok=True)
-
-feature_columns = X_train.columns.tolist()
-
-model_paths = {}
 
 lgbm_model_path = MODELS_DIR / "lgbm_v7_model.joblib"
+xgb_model_path = MODELS_DIR / "xgb_v7_model.joblib"
+cat_model_path = MODELS_DIR / "cat_v7_model.cbm"
+
 joblib.dump(lgbm_model, lgbm_model_path)
-model_paths["lightgbm"] = str(lgbm_model_path)
+joblib.dump(xgb_model, xgb_model_path)
+cat_model.save_model(str(cat_model_path))
 
-if "xgb_model" in globals():
-    xgb_model_path = MODELS_DIR / "xgb_v7_model.joblib"
-    joblib.dump(xgb_model, xgb_model_path)
-    model_paths["xgboost"] = str(xgb_model_path)
 
-if "cat_model" in globals():
-    cat_model_path = MODELS_DIR / "cat_v7_model.cbm"
-    cat_model.save_model(str(cat_model_path))
-    model_paths["catboost"] = str(cat_model_path)
+################################################
+# Save Preprocessing Artifacts
+################################################
 
 preprocessing_artifacts = {
     "feature_columns": feature_columns,
@@ -1253,27 +978,33 @@ preprocessing_artifacts = {
     "aggregation_maps": aggregation_maps,
     "global_amount_stats": global_amount_stats,
     "threshold_default": 0.50,
-    "threshold_best_ensemble_f1": 0.71,
-    "threshold_best_lgbm_f1": 0.70,
+    "threshold_best_ensemble_f1": float(best_ensemble_threshold_row["threshold"]),
+    "threshold_best_lgbm_f1": float(best_lgbm_threshold_row["threshold"]),
 }
 
-artifacts_path = MODELS_DIR / "v7_ensemble_preprocessing_artifacts.joblib"
 preprocessing_artifacts = make_json_safe(preprocessing_artifacts)
+
+artifacts_path = MODELS_DIR / "v7_ensemble_preprocessing_artifacts.joblib"
 joblib.dump(preprocessing_artifacts, artifacts_path)
+
+
+################################################
+# Save Config and Metrics
+################################################
 
 ensemble_config = {
     "model_name": "v7 Final Ensemble",
-    "models": model_paths,
-    "ensemble_weights": {
-        "lightgbm": 0.70,
-        "xgboost": 0.20,
-        "catboost": 0.10
+    "models": {
+        "lightgbm": str(lgbm_model_path),
+        "xgboost": str(xgb_model_path),
+        "catboost": str(cat_model_path),
     },
+    "ensemble_weights": ensemble_weights,
     "threshold_default": 0.50,
-    "threshold_best_f1": 0.71,
+    "threshold_best_f1": float(best_ensemble_threshold_row["threshold"]),
     "primary_metric": "ROC-AUC",
-    "validation_roc_auc": 0.9292,
-    "note": "Final v7 ensemble artifact for API and Streamlit deployment."
+    "validation_roc_auc": float(roc_auc_score(y_valid, ensemble_valid_proba)),
+    "note": "Final v7 ensemble artifact for FastAPI and Streamlit deployment.",
 }
 
 config_path = MODELS_DIR / "v7_ensemble_config.json"
@@ -1281,14 +1012,52 @@ config_path = MODELS_DIR / "v7_ensemble_config.json"
 with open(config_path, "w", encoding="utf-8") as file:
     json.dump(ensemble_config, file, indent=4)
 
+individual_results_df = pd.DataFrame([
+    lgbm_results,
+    xgb_results,
+    cat_results,
+])
+
+individual_results_path = METRICS_DIR / "v7_artifact_individual_model_results.csv"
+individual_results_df.to_csv(individual_results_path, index=False)
+
+ensemble_metrics_path = METRICS_DIR / "v7_ensemble_artifact_metrics.csv"
+pd.DataFrame([ensemble_results]).to_csv(ensemble_metrics_path, index=False)
+
+ensemble_threshold_path = METRICS_DIR / "v7_ensemble_artifact_threshold_results.csv"
+ensemble_threshold_results_df.to_csv(ensemble_threshold_path, index=False)
+
+
+################################################
+# Save Lightweight Feature Metadata
+################################################
+
+feature_metadata = {
+    "n_features": len(feature_columns),
+    "n_categorical_columns": len(cat_cols),
+    "n_numerical_columns": len(num_cols),
+    "frequency_columns": frequency_cols,
+    "interaction_columns": [f"{a}__{b}" for a, b in interaction_cols],
+    "amount_group_columns": amount_group_cols,
+}
+
+feature_metadata_path = MODELS_DIR / "v7_feature_metadata.json"
+
+with open(feature_metadata_path, "w", encoding="utf-8") as file:
+    json.dump(feature_metadata, file, indent=4)
+
+
+################################################
+# Final Logs
+################################################
+
 print("##################### Saved v7 Final Ensemble Artifacts #####################")
 print(lgbm_model_path)
-
-if "xgb_model" in globals():
-    print(xgb_model_path)
-
-if "cat_model" in globals():
-    print(cat_model_path)
-
+print(xgb_model_path)
+print(cat_model_path)
 print(artifacts_path)
 print(config_path)
+print(feature_metadata_path)
+print(individual_results_path)
+print(ensemble_metrics_path)
+print(ensemble_threshold_path)

@@ -1,0 +1,43 @@
+{
+    "n_features": 556,
+    "n_categorical_columns": 38,
+    "n_numerical_columns": 518,
+    "frequency_columns": [
+        "card1",
+        "card2",
+        "card3",
+        "card5",
+        "addr1",
+        "addr2",
+        "uid_card1_addr1",
+        "uid_card1_card2_addr1",
+        "uid_card1_addr1_pemail",
+        "uid_card1_card2_addr1_pemail",
+        "uid_card1_addr1_product",
+        "uid_card1_card2_addr1_product"
+    ],
+    "interaction_columns": [
+        "card1__addr1",
+        "card1__ProductCD",
+        "card1__P_emaildomain",
+        "card1__R_emaildomain",
+        "card2__addr1",
+        "card2__ProductCD",
+        "addr1__ProductCD",
+        "P_emaildomain__ProductCD",
+        "uid_card1_addr1__ProductCD",
+        "uid_card1_card2_addr1__ProductCD",
+        "uid_card1_addr1__P_emaildomain"
+    ],
+    "amount_group_columns": [
+        "card1",
+        "card2",
+        "addr1",
+        "P_emaildomain",
+        "ProductCD",
+        "uid_card1_addr1",
+        "uid_card1_card2_addr1",
+        "uid_card1_addr1_pemail",
+        "uid_card1_addr1_product"
+    ]
+}
