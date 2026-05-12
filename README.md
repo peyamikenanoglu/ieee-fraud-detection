@@ -1,5 +1,25 @@
 # IEEE-CIS Fraud Detection
 
+## Executive Summary
+
+This project is an end-to-end fraud detection machine learning system built on the IEEE-CIS Fraud Detection dataset.
+
+The goal is not only to train a high-performing classifier, but to build a realistic and portfolio-ready ML workflow that includes:
+
+- time-aware validation instead of random splitting,
+- leakage-safe feature engineering,
+- strong tabular ML models,
+- weighted ensemble prediction,
+- threshold-based fraud risk classification,
+- FastAPI model serving,
+- Streamlit frontend demo,
+- reproducible project structure,
+- business-oriented interpretation.
+
+The final weighted ensemble achieved a validation ROC-AUC of **0.9292**. The strongest single model was LightGBM v7, which achieved strong operational performance with the best F1 score and LogLoss among the final models.
+
+This project demonstrates how machine learning can be used to support fraud risk scoring in online transaction systems.
+
 A time-aware fraud detection pipeline for the IEEE-CIS Fraud Detection dataset. The project builds a complete machine learning workflow using structured tabular data, leakage-safe feature engineering, LightGBM, XGBoost, CatBoost, and weighted ensemble learning.
 
 The final model reaches a validation ROC-AUC of **0.9292** using a weighted ensemble of LightGBM, XGBoost, and CatBoost.
@@ -14,6 +34,34 @@ The objective is to predict whether an online transaction is fraudulent.
 | `isFraud = 1` | Fraud transaction |
 
 This is a binary classification problem with strong class imbalance. Fraudulent transactions represent only a small proportion of the dataset, so accuracy alone is not sufficient. The project uses ROC-AUC as the main metric, while also reporting PR-AUC, LogLoss, precision, recall, F1-score, and threshold-based results.
+
+## Business Value
+
+Fraud detection is a high-impact machine learning use case because fraudulent transactions can create direct financial loss, operational cost, customer trust issues, and manual review burden.
+
+This project shows how a fraud detection system can support business decision-making by:
+
+- ranking transactions by fraud probability,
+- assigning a fraud/non-fraud decision using an operational threshold,
+- supporting manual review prioritization,
+- reducing dependence on simple rule-based fraud filters,
+- exposing the model through a FastAPI prediction endpoint,
+- providing an interactive Streamlit frontend for demonstration.
+
+The model output is designed as a fraud risk score, not only a binary prediction. This makes the system more useful for real-world decision workflows where different thresholds may be selected depending on business risk tolerance.
+
+## Technical Stack
+
+| Area | Tools |
+|---|---|
+| Programming | Python |
+| Data Processing | pandas, NumPy |
+| Machine Learning | LightGBM, XGBoost, CatBoost, scikit-learn |
+| Evaluation | ROC-AUC, PR-AUC, LogLoss, precision, recall, F1-score |
+| Deployment | FastAPI, Uvicorn |
+| Frontend Demo | Streamlit |
+| Visualization | matplotlib, seaborn |
+| Project Structure | modular Python scripts, saved artifacts, reproducible workflow |
 
 ## Dataset
 
@@ -222,7 +270,7 @@ The final version used:
 | v7 | CatBoost | 0.9112 | 0.5091 | 0.3049 | 0.3269 | N/A |
 | v7 | Final Ensemble | 0.9292 | 0.5905 | 0.1621 | 0.4981 | 0.5804 |
 
-### Final Champion
+### Final Champion and Operational Model Choice
 
 The final champion by ROC-AUC is the v7 weighted ensemble.
 
@@ -242,6 +290,24 @@ Final ensemble results:
 | F1 at threshold 0.50 | 0.4981 |
 | Best threshold | 0.71 |
 | Best F1 | 0.5804 |
+
+The ensemble produced the highest ROC-AUC, making it the best ranking model.
+
+However, LightGBM v7 remained the strongest single operational model because it achieved the best PR-AUC, LogLoss, and best F1 among the final individual models.
+
+| Metric | LightGBM v7 |
+|---|---:|
+| ROC-AUC | 0.9252 |
+| PR-AUC | 0.5977 |
+| LogLoss | 0.1321 |
+| F1 at threshold 0.50 | 0.5223 |
+| Best threshold | 0.70 |
+| Best F1 | 0.5916 |
+
+For this reason, the project reports two views:
+
+- **Best ranking model:** v7 weighted ensemble, based on ROC-AUC.
+- **Best single operational model:** LightGBM v7, based on PR-AUC, LogLoss, and F1.
 
 ### Best Single Model
 
@@ -296,10 +362,16 @@ ieee-fraud-detection/
 ├── README.md
 ├── requirements.txt
 ├── .gitignore
+├── test_api_request.py
+├── streamlit_app.py
+│
+├── api/
+│   ├── app.py
+│   └── __init__.py
 │
 ├── data/
 │   ├── raw/              # Kaggle raw data, not tracked by Git
-│   ├── processed/        # Generated processed CSVs, not tracked by Git
+│   ├── processed/        # Generated processed files, not tracked by Git
 │   └── interim/
 │
 ├── notebooks/
@@ -319,11 +391,14 @@ ieee-fraud-detection/
 │   ├── modeling_baseline_v5_from_raw_memory_safe.py
 │   ├── modeling_baseline_v6_from_raw_memory_safe.py
 │   ├── modeling_baseline_v7_final.py
+│   ├── train_v7_ensemble_artifacts.py
+│   ├── audit_v7_artifacts.py
 │   └── final_model_comparison.py
 │
 ├── outputs/
 │   ├── figures/
-│   └── metrics/
+│   ├── metrics/
+│   └── models/           # Generated model artifacts, not tracked by Git
 │
 └── reports/
     └── final_project_summary.md
@@ -469,6 +544,32 @@ If it does not open automatically, paste the URL into the browser.
 6. Review the ensemble fraud probability and model-level probabilities.
 
 The Streamlit interface is intended for demonstration and portfolio presentation. The backend prediction logic remains inside the FastAPI service.
+
+## Limitations
+
+This project is designed as a portfolio-oriented fraud detection system, not a production fraud platform.
+
+Main limitations:
+
+- The dataset is historical and anonymized, so some real business variables are not available.
+- The validation strategy is time-aware, but it is still an offline validation setup.
+- The project does not include live monitoring, model drift detection, or automated retraining.
+- Model artifacts are not tracked in Git because of file size constraints.
+- The Streamlit frontend is intended for demonstration, not production use.
+- The model should be calibrated and monitored before being used in a real financial decision system.
+
+## Future Improvements
+
+Potential next improvements include:
+
+- probability calibration,
+- model drift monitoring,
+- Docker-based deployment,
+- batch prediction pipeline,
+- database integration,
+- SHAP-based model interpretation,
+- MLflow experiment tracking,
+- CI/CD workflow for testing API and preprocessing consistency.
 
 ## Key Takeaways
 
