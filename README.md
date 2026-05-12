@@ -20,10 +20,6 @@ The final weighted ensemble achieved a validation ROC-AUC of **0.9292**. The str
 
 This project demonstrates how machine learning can be used to support fraud risk scoring in online transaction systems.
 
-A time-aware fraud detection pipeline for the IEEE-CIS Fraud Detection dataset. The project builds a complete machine learning workflow using structured tabular data, leakage-safe feature engineering, LightGBM, XGBoost, CatBoost, and weighted ensemble learning.
-
-The final model reaches a validation ROC-AUC of **0.9292** using a weighted ensemble of LightGBM, XGBoost, and CatBoost.
-
 ## Project Overview
 
 The objective is to predict whether an online transaction is fraudulent.
@@ -308,21 +304,6 @@ For this reason, the project reports two views:
 
 - **Best ranking model:** v7 weighted ensemble, based on ROC-AUC.
 - **Best single operational model:** LightGBM v7, based on PR-AUC, LogLoss, and F1.
-
-### Best Single Model
-
-The best single model was LightGBM v7.
-
-| Metric | Value |
-|---|---:|
-| ROC-AUC | 0.9252 |
-| PR-AUC | 0.5977 |
-| LogLoss | 0.1321 |
-| F1 at threshold 0.50 | 0.5223 |
-| Best threshold | 0.70 |
-| Best F1 | 0.5916 |
-
-The final ensemble produced the highest ROC-AUC, while LightGBM v7 produced the strongest single-model operational F1.
 
 ## Visual Results
 
