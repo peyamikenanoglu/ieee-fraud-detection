@@ -374,6 +374,12 @@ Large model artifact files are not tracked by Git. To recreate them locally, run
 
 Before running the API, make sure the model artifacts exist.
 
+After generating the local model artifacts, the artifact audit script can be used to verify that all deployment components are available and compatible:
+
+`python src/audit_v7_artifacts.py`
+
+The audit checks model files, preprocessing artifacts, feature-column compatibility, ensemble weights, and aggregation maps. The API should only be used after the audit confirms that the artifacts are complete.
+
 ### Run the API
 
 `uvicorn api.app:app --reload`
