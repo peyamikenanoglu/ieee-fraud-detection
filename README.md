@@ -1,5 +1,29 @@
 # IEEE-CIS Fraud Detection
 
+## 30-Second Summary
+
+This repository presents an end-to-end fraud detection machine learning system for scoring online transactions by fraud risk. It is designed as a serious portfolio project, not a simple Kaggle notebook: the workflow includes time-aware validation, leakage-safe feature engineering, strong tabular ML models, threshold-based risk classification, and FastAPI/Streamlit components for serving and demonstration.
+
+| Area                     | Summary                                                                                                    |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| Problem                  | Predict fraudulent online transactions and generate fraud risk scores                                      |
+| Dataset                  | Kaggle IEEE-CIS Fraud Detection dataset                                                                    |
+| Validation               | Time-aware split: first 80% of transactions for training, last 20% for validation                          |
+| Best ranking model       | Weighted ensemble of LightGBM, XGBoost, and CatBoost                                                       |
+| Final ensemble result    | ROC-AUC: **0.9292**                                                                                        |
+| Operational single model | LightGBM v7: ROC-AUC 0.9252, PR-AUC 0.5977, LogLoss 0.1321, Best F1 0.5916                                 |
+| Serving/demo components  | FastAPI backend and Streamlit frontend                                                                     |
+| Scope                    | Portfolio-oriented fraud risk modeling system with documented limitations; not a production fraud platform |
+
+What this project demonstrates:
+
+* Applied fraud risk scoring for transaction ranking and manual review prioritization.
+* Time-aware validation instead of random splitting to reduce optimistic evaluation.
+* Leakage-safe feature engineering, including frequency, aggregation, UID-style, identity, device, email, and transaction amount features.
+* Model comparison across LightGBM, XGBoost, CatBoost, and a weighted ensemble.
+* Threshold analysis and metric tradeoffs for operational decision support.
+* API serving and demo interface components without overstating production readiness.
+
 ## Executive Summary
 
 This project is an end-to-end fraud detection machine learning system built on the IEEE-CIS Fraud Detection dataset.
